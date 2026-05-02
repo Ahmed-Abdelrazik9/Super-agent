@@ -221,7 +221,15 @@ router.post("/search", async (req, res) => {
   }
 });
 
-// ─── GET /search/images — DuckDuckGo image search ─────────────────────────────
+// ─── SearXNG public instances (tried in order) ────────────────────────────────
+const SEARXNG_INSTANCES = [
+  "https://searx.be",
+  "https://searxng.world",
+  "https://search.sapti.me",
+  "https://searx.tiekoetter.com",
+];
+
+// ─── GET /search/images — SearXNG image search (no API key, safesearch=0) ─────
 router.get("/search/images", async (req, res) => {
   const query = req.query.q as string;
   const page  = Number(req.query.page ?? 0);
@@ -232,61 +240,54 @@ router.get("/search/images", async (req, res) => {
   const cached = trendingCache.get(cacheKey);
   if (cached) { res.json(cached); return; }
 
-  try {
-    // Step 1: Obtain vqd token
-    const vqdRes = await fetch(
-      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-      }
-    );
-    const html = await vqdRes.text();
-    const vqdMatch = html.match(/vqd=['"]([^'"]+)['"]/);
-    if (!vqdMatch) throw new Error("Could not obtain vqd token from DuckDuckGo");
-    const vqd = vqdMatch[1];
+  const offset = page * 1 + 1; // SearXNG uses page numbers starting at 1
 
-    // Step 2: Fetch image results
-    const offset = page * 100;
-    const imgRes = await fetch(
-      `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=-2&s=${offset}&u=bing&f=,,,&l=us-en&vqd=${encodeURIComponent(vqd)}`,
-      {
+  let lastErr: unknown;
+  for (const base of SEARXNG_INSTANCES) {
+    try {
+      const url = `${base}/search?q=${encodeURIComponent(query)}&categories=images&format=json&safesearch=0&language=en&pageno=${offset}`;
+      const imgRes = await fetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-          "Referer": "https://duckduckgo.com/",
           "Accept": "application/json",
         },
-      }
-    );
+        signal: AbortSignal.timeout(8000),
+      });
 
-    if (!imgRes.ok) throw new Error(`DuckDuckGo image API returned ${imgRes.status}`);
+      if (!imgRes.ok) { lastErr = new Error(`${base} returned ${imgRes.status}`); continue; }
 
-    const data = await imgRes.json() as {
-      results?: Array<{
-        image: string; title: string; url: string;
-        thumbnail: string; width: number; height: number; source: string;
-      }>;
-    };
+      const data = await imgRes.json() as {
+        results?: Array<{
+          img_src?: string; url?: string; title?: string;
+          thumbnail_src?: string; source?: string;
+          img_format?: string; filesize?: number;
+        }>;
+      };
 
-    const images = (data.results ?? []).slice(0, 80).map((img) => ({
-      url:       img.image,
-      thumbnail: img.thumbnail,
-      title:     img.title,
-      sourceUrl: img.url,
-      source:    img.source,
-      width:     img.width,
-      height:    img.height,
-    }));
+      const images = (data.results ?? [])
+        .filter((r) => r.img_src)
+        .slice(0, 80)
+        .map((img) => ({
+          url:       img.img_src!,
+          thumbnail: img.thumbnail_src || img.img_src!,
+          title:     img.title || "",
+          sourceUrl: img.url || img.img_src!,
+          source:    img.source || new URL(img.url || img.img_src!).hostname.replace("www.", ""),
+          width:     0,
+          height:    0,
+        }));
 
-    const payload = { images, query };
-    trendingCache.set(cacheKey, payload, 5 * 60_000);
-    res.json(payload);
-  } catch (err) {
-    req.log.error({ err }, "Image search failed");
-    res.status(500).json({ error: "Image search failed. Please try again." });
+      const payload = { images, query };
+      trendingCache.set(cacheKey, payload, 5 * 60_000);
+      res.json(payload);
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
   }
+
+  req.log.error({ err: lastErr }, "All SearXNG instances failed");
+  res.status(500).json({ error: "Image search failed. Please try again." });
 });
 
 // ─── GET /search/history ──────────────────────────────────────────────────────
