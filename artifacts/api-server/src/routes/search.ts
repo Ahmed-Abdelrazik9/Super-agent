@@ -251,7 +251,7 @@ router.get("/search/images", async (req, res) => {
     // Step 2: Fetch image results
     const offset = page * 100;
     const imgRes = await fetch(
-      `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=${offset}&u=bing&f=,,,&l=us-en&vqd=${encodeURIComponent(vqd)}`,
+      `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=-2&s=${offset}&u=bing&f=,,,&l=us-en&vqd=${encodeURIComponent(vqd)}`,
       {
         headers: {
           "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
