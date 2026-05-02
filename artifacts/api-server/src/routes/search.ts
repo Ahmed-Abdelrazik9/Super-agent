@@ -73,7 +73,7 @@ router.post("/search", async (req, res) => {
   try {
     sendEvent("status", { message: "Initiating search...", phase: "searching" });
 
-    const maxTokens = mode === "quick" ? 1024 : mode === "deep" ? 2048 : 4096;
+    const maxTokens = mode === "quick" ? 2048 : mode === "deep" ? 4096 : 8192;
     const model     = mode === "quick" ? "gpt-5-mini" : "gpt-5.4";
 
     const systemPrompt =
@@ -102,29 +102,47 @@ router.post("/search", async (req, res) => {
     sendEvent("status", { message: "Searching the web...", phase: "searching" });
 
     for await (const event of stream) {
-      if (event.type === "response.output_item.added") {
-        if (event.item.type === "web_search_call") {
-          sendEvent("status", {
-            message: `Searching: "${(event.item as { query?: string }).query ?? query}"`,
-            phase: "searching",
-          });
+      const evType = (event as any).type as string;
+
+      // ── Search sub-query status ──────────────────────────────────────────
+      if (evType === "response.output_item.added") {
+        const item = (event as any).item;
+        if (item?.type === "web_search_call") {
+          const q = item.query ?? item.action?.query ?? query;
+          sendEvent("status", { message: `Searching: "${q}"`, phase: "searching" });
         }
-      } else if (event.type === "response.output_text.delta") {
-        fullSynthesis += event.delta;
-        sendEvent("delta", { content: event.delta });
-      } else if (event.type === "response.completed") {
-        for (const item of event.response.output) {
+
+      // ── Text delta — primary path ────────────────────────────────────────
+      } else if (evType === "response.output_text.delta") {
+        const chunk = (event as any).delta ?? (event as any).text ?? "";
+        if (chunk) { fullSynthesis += chunk; sendEvent("delta", { content: chunk }); }
+
+      // ── Text delta — alternative names some proxies use ─────────────────
+      } else if (evType === "response.text.delta" || evType === "text_delta" || evType === "content_block_delta") {
+        const chunk = (event as any).delta?.text ?? (event as any).delta ?? (event as any).text ?? "";
+        if (chunk) { fullSynthesis += chunk; sendEvent("delta", { content: chunk }); }
+
+      // ── Response completed — extract sources + fallback text ─────────────
+      } else if (evType === "response.completed") {
+        const output = (event as any).response?.output ?? [];
+        for (const item of output) {
           if (item.type === "message") {
             for (const content of item.content) {
-              if (content.type === "output_text" && content.annotations) {
-                for (const ann of content.annotations) {
+              if (content.type === "output_text") {
+                // Fallback: if streaming deltas produced nothing, use the full text
+                if (!fullSynthesis && content.text) {
+                  fullSynthesis = content.text;
+                  sendEvent("delta", { content: fullSynthesis });
+                }
+                // Extract URL citations as sources
+                for (const ann of content.annotations ?? []) {
                   if (ann.type === "url_citation" && !seenUrls.has(ann.url)) {
                     seenUrls.add(ann.url);
                     const domain = (() => { try { return new URL(ann.url).hostname.replace("www.", ""); } catch { return ann.url; } })();
                     sources.push({
                       title: ann.title || domain,
                       url: ann.url,
-                      snippet: fullSynthesis.slice(ann.start_index, ann.end_index).trim().slice(0, 300),
+                      snippet: fullSynthesis.slice(ann.start_index ?? 0, ann.end_index ?? 300).trim().slice(0, 300),
                       credibilityScore: computeCredibilityScore(domain, ann.url),
                       domain,
                     });
@@ -482,22 +500,38 @@ router.post("/search/:id/follow-up", async (req, res) => {
     const seenUrls = new Set<string>();
 
     for await (const event of stream) {
-      if (event.type === "response.output_text.delta") {
-        fullContent += event.delta;
-        sendEvent("delta", { content: event.delta });
-      } else if (event.type === "response.completed") {
-        for (const item of event.response.output) {
+      const evType = (event as any).type as string;
+
+      if (evType === "response.output_item.added") {
+        const item = (event as any).item;
+        if (item?.type === "web_search_call") {
+          const q = item.query ?? item.action?.query ?? body.data.question;
+          sendEvent("status", { message: `Searching: "${q}"`, phase: "searching" });
+        }
+      } else if (evType === "response.output_text.delta") {
+        const chunk = (event as any).delta ?? (event as any).text ?? "";
+        if (chunk) { fullContent += chunk; sendEvent("delta", { content: chunk }); }
+      } else if (evType === "response.text.delta" || evType === "text_delta" || evType === "content_block_delta") {
+        const chunk = (event as any).delta?.text ?? (event as any).delta ?? (event as any).text ?? "";
+        if (chunk) { fullContent += chunk; sendEvent("delta", { content: chunk }); }
+      } else if (evType === "response.completed") {
+        const output = (event as any).response?.output ?? [];
+        for (const item of output) {
           if (item.type === "message") {
             for (const content of item.content) {
-              if (content.type === "output_text" && content.annotations) {
-                for (const ann of content.annotations) {
+              if (content.type === "output_text") {
+                if (!fullContent && content.text) {
+                  fullContent = content.text;
+                  sendEvent("delta", { content: fullContent });
+                }
+                for (const ann of content.annotations ?? []) {
                   if (ann.type === "url_citation" && !seenUrls.has(ann.url)) {
                     seenUrls.add(ann.url);
                     const domain = (() => { try { return new URL(ann.url).hostname.replace("www.", ""); } catch { return ann.url; } })();
                     sources.push({
                       title: ann.title || domain,
                       url: ann.url,
-                      snippet: fullContent.slice(ann.start_index, ann.end_index).trim().slice(0, 300),
+                      snippet: fullContent.slice(ann.start_index ?? 0, ann.end_index ?? 300).trim().slice(0, 300),
                       credibilityScore: computeCredibilityScore(domain, ann.url),
                       domain,
                     });
