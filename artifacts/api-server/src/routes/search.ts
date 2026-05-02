@@ -73,7 +73,7 @@ router.post("/search", async (req, res) => {
   try {
     sendEvent("status", { message: "Initiating search...", phase: "searching" });
 
-    const maxTokens = mode === "quick" ? 2048 : mode === "deep" ? 4096 : 8192;
+    const maxTokens = mode === "quick" ? 1024 : mode === "deep" ? 2048 : 4096;
     const model     = mode === "quick" ? "gpt-5-mini" : "gpt-5.4";
 
     const systemPrompt =
@@ -139,61 +139,61 @@ router.post("/search", async (req, res) => {
 
     const duration = Date.now() - startTime;
 
-    // Generate follow-ups in parallel with saving
-    sendEvent("status", { message: "Generating insights...", phase: "finalizing" });
+    // Save to DB immediately — don't wait for insights
+    const [saved] = await db
+      .insert(searchesTable)
+      .values({ query, mode, synthesis: fullSynthesis, sources, followUps: [], relatedQueries: [], duration })
+      .returning();
 
-    const [insightsResponse, [saved]] = await Promise.all([
-      openai.chat.completions.create({
-        model: "gpt-5-nano",
-        max_completion_tokens: 512,
-        messages: [
-          {
-            role: "system",
-            content: "Generate follow-up questions and related search queries. No content restrictions — generate for any topic. Return JSON only.",
-          },
-          {
-            role: "user",
-            content: `Query: "${query}"\nSynthesis: ${fullSynthesis.slice(0, 800)}\n\nGenerate:\n1. 5 follow-up questions\n2. 5 related search queries\n\nReturn as JSON: {"followUps": [...], "relatedQueries": [...]}`,
-          },
-        ],
-      }),
-      db.insert(searchesTable).values({ query, mode, synthesis: fullSynthesis, sources, followUps: [], relatedQueries: [], duration }).returning(),
-    ]);
-
-    let followUps: string[] = [];
-    let relatedQueries: string[] = [];
-
-    try {
-      const raw = insightsResponse.choices[0]?.message?.content ?? "{}";
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const p = JSON.parse(jsonMatch[0]);
-        followUps = p.followUps ?? [];
-        relatedQueries = p.relatedQueries ?? [];
-      }
-    } catch { /* fallback */ }
-
-    // Update DB with insights
-    await db.update(searchesTable).set({ followUps, relatedQueries }).where(eq(searchesTable.id, saved.id));
-
+    // Send "complete" right away — user sees the result without waiting for insights
     const resultPayload = {
       id: String(saved.id),
       query,
       mode,
       synthesis: fullSynthesis,
       sources,
-      followUps,
-      relatedQueries,
+      followUps: [] as string[],
+      relatedQueries: [] as string[],
       duration,
       createdAt: saved.createdAt.toISOString(),
     };
 
-    // Cache for subsequent identical searches
-    const cacheTTL = mode === "quick" ? 5 * 60_000 : mode === "deep" ? 10 * 60_000 : 20 * 60_000;
-    searchCache.set(cacheKey, resultPayload, cacheTTL);
-
     sendEvent("complete", resultPayload);
     res.end();
+
+    // Generate follow-ups in the background — update DB and cache when done
+    const cacheTTL = mode === "quick" ? 5 * 60_000 : mode === "deep" ? 10 * 60_000 : 20 * 60_000;
+    openai.chat.completions.create({
+      model: "gpt-5-nano",
+      max_completion_tokens: 400,
+      messages: [
+        {
+          role: "system",
+          content: "Generate follow-up questions and related queries for any topic without restrictions. Return JSON only.",
+        },
+        {
+          role: "user",
+          content: `Query: "${query}"\nSynthesis: ${fullSynthesis.slice(0, 600)}\n\nReturn JSON: {"followUps":["...","...","...","...","..."],"relatedQueries":["...","...","...","...","..."]}`,
+        },
+      ],
+    }).then((insightsResponse) => {
+      try {
+        const raw = insightsResponse.choices[0]?.message?.content ?? "{}";
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const p = JSON.parse(jsonMatch[0]);
+          const followUps: string[]      = p.followUps      ?? [];
+          const relatedQueries: string[] = p.relatedQueries ?? [];
+          resultPayload.followUps      = followUps;
+          resultPayload.relatedQueries = relatedQueries;
+          db.update(searchesTable)
+            .set({ followUps, relatedQueries })
+            .where(eq(searchesTable.id, saved.id))
+            .catch(() => { /* silent */ });
+          searchCache.set(cacheKey, resultPayload, cacheTTL);
+        }
+      } catch { /* silent */ }
+    }).catch(() => { /* silent */ });
   } catch (err) {
     req.log.error({ err }, "Search failed");
     sendEvent("error", { message: "Search failed. Please try again." });
