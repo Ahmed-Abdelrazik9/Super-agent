@@ -5,19 +5,22 @@ import { Button } from "@/components/ui/button";
 
 interface SearchBarProps {
   onSearch: (query: string, mode: "quick" | "deep" | "expert") => void;
+  onStop?: () => void;
   isSearching: boolean;
   initialQuery?: string;
   initialMode?: "quick" | "deep" | "expert";
 }
 
-export function SearchBar({ onSearch, isSearching, initialQuery = "", initialMode = "deep" }: SearchBarProps) {
+export function SearchBar({ onSearch, onStop, isSearching, initialQuery = "", initialMode = "deep" }: SearchBarProps) {
   const [query, setQuery] = useState(initialQuery);
   const [mode, setMode] = useState<"quick" | "deep" | "expert">(initialMode);
   const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim() && !isSearching) {
+    if (isSearching) {
+      onStop?.();
+    } else if (query.trim()) {
       onSearch(query, mode);
     }
   };
@@ -48,15 +51,21 @@ export function SearchBar({ onSearch, isSearching, initialQuery = "", initialMod
           className="flex-1 bg-transparent border-none outline-none text-lg text-foreground placeholder:text-muted-foreground disabled:opacity-50"
           disabled={isSearching}
         />
-        <Button 
-          type="submit" 
-          disabled={!query.trim() || isSearching}
-          className="ml-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all"
+        <Button
+          type="submit"
+          disabled={!isSearching && !query.trim()}
+          className={cn(
+            "ml-2 transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)]",
+            isSearching
+              ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-[0_0_15px_rgba(255,60,60,0.3)]"
+              : "bg-primary text-primary-foreground hover:bg-primary/90"
+          )}
+          data-testid="button-search-submit"
         >
           {isSearching ? (
             <span className="flex items-center gap-2">
-              <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-              Searching
+              <div className="h-4 w-4 border-2 border-destructive-foreground border-t-transparent rounded-full animate-spin" />
+              Stop
             </span>
           ) : (
             "Search"

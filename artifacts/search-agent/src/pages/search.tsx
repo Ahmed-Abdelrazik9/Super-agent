@@ -18,7 +18,7 @@ export default function SearchPage() {
     query: { enabled: !!id, queryKey: getGetSearchQueryKey(id || "") }
   });
 
-  const { startSearch, startFollowUp, isSearching, status, synthesis: streamingSynthesis, result } = useSearchStream();
+  const { startSearch, startFollowUp, stopSearch, isSearching, status, synthesis: streamingSynthesis, result } = useSearchStream();
 
   // The actual data to display - either the completed search data from API,
   // the completed result from the stream, or the active streaming state.
@@ -75,8 +75,9 @@ export default function SearchPage() {
           
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md pt-2 pb-6 border-b border-border/50">
             <SearchBar 
-              onSearch={startSearch} 
-              isSearching={isSearching && !id} 
+              onSearch={startSearch}
+              onStop={stopSearch}
+              isSearching={isSearching}
               initialQuery={displayData?.query || ""}
               initialMode={(displayData?.mode as any) || "deep"}
             />

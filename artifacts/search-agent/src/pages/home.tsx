@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function Home() {
   const { data: trendingTopics } = useGetTrendingTopics();
   const { data: searchStats } = useGetSearchStats();
-  const { startSearch, isSearching, status, synthesis } = useSearchStream();
+  const { startSearch, stopSearch, isSearching, status, synthesis } = useSearchStream();
 
   return (
     <Layout>
@@ -24,7 +24,7 @@ export default function Home() {
         </div>
 
         <div className="w-full mb-16 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-150">
-          <SearchBar onSearch={startSearch} isSearching={isSearching} />
+          <SearchBar onSearch={startSearch} onStop={stopSearch} isSearching={isSearching} />
           
           {isSearching && status && (
             <div className="mt-6 p-4 rounded-lg bg-card/50 border border-primary/30 w-full max-w-3xl mx-auto">
