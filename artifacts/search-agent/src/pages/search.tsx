@@ -5,13 +5,116 @@ import { SearchProgress } from "@/components/search-progress";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { useGetSearch, getGetSearchQueryKey } from "@workspace/api-client-react";
 import ReactMarkdown from "react-markdown";
+import { useState } from "react";
 import {
-  ExternalLink, ShieldCheck, ShieldAlert, Shield,
+  Globe, ExternalLink,
   Zap, Layers, Brain, Search as SearchIcon, ArrowRight, Image,
+  ChevronRight,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+/* ── Grok-style Source Cards ──────────────────────────────── */
+
+function FavIcon({ domain }: { domain: string }) {
+  const [ok, setOk] = useState(true);
+  if (!ok) return <Globe className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+      alt=""
+      className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
+      onError={() => setOk(false)}
+    />
+  );
+}
+
+function SourceCard({ source, index }: { source: any; index: number }) {
+  return (
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-col gap-2 p-3 rounded-xl border border-border/60 bg-card/60 hover:bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-150 min-w-[180px] max-w-[220px] flex-shrink-0"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <FavIcon domain={source.domain} />
+          <span className="text-xs text-muted-foreground truncate font-medium">{source.domain}</span>
+        </div>
+        <span className="text-[10px] font-mono text-muted-foreground/60 bg-muted/60 px-1.5 py-0.5 rounded flex-shrink-0">
+          {index + 1}
+        </span>
+      </div>
+      <p className="text-xs text-foreground/80 line-clamp-2 leading-relaxed group-hover:text-foreground transition-colors">
+        {source.title}
+      </p>
+      <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50 group-hover:text-primary/60 transition-colors">
+        <ExternalLink className="w-2.5 h-2.5" />
+        <span className="truncate">{source.url.replace(/^https?:\/\//, "").slice(0, 35)}</span>
+      </div>
+    </a>
+  );
+}
+
+function SourceCardSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-xl border border-border/40 bg-card/30 min-w-[180px] max-w-[220px] flex-shrink-0 animate-pulse">
+      <div className="flex items-center gap-1.5">
+        <Skeleton className="w-3.5 h-3.5 rounded-sm" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-3/4" />
+    </div>
+  );
+}
+
+function SourceCards({ sources, isStreaming }: { sources: any[]; isStreaming: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const COLLAPSED_COUNT = 4;
+  const showToggle = sources.length > COLLAPSED_COUNT;
+  const visible = expanded ? sources : sources.slice(0, COLLAPSED_COUNT);
+
+  return (
+    <div className="space-y-2 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <Globe className="w-3 h-3" />
+          Sources
+          {sources.length > 0 && (
+            <span className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px]">
+              {sources.length}
+            </span>
+          )}
+        </h3>
+        {showToggle && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            {expanded ? "Show less" : `+${sources.length - COLLAPSED_COUNT} more`}
+            <ChevronRight className={cn("w-3 h-3 transition-transform", expanded && "rotate-90")} />
+          </button>
+        )}
+      </div>
+
+      <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+        {visible.map((src, i) => (
+          <SourceCard key={src.url || i} source={src} index={i} />
+        ))}
+        {isStreaming && sources.length === 0 && (
+          <>
+            <SourceCardSkeleton />
+            <SourceCardSkeleton />
+            <SourceCardSkeleton />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SearchPage() {
   const { id }          = useParams<{ id: string }>();
@@ -40,16 +143,6 @@ export default function SearchPage() {
       startSearch(q, mode as any);
     }
   };
-
-  const getCredibilityColor = (score: number) =>
-    score > 0.8 ? "text-green-500 bg-green-500/10 border-green-500/20"
-    : score > 0.6 ? "text-yellow-500 bg-yellow-500/10 border-yellow-500/20"
-    : "text-red-500 bg-red-500/10 border-red-500/20";
-
-  const getCredibilityIcon = (score: number) =>
-    score > 0.8 ? <ShieldCheck className="h-3 w-3" />
-    : score > 0.6 ? <Shield className="h-3 w-3" />
-    : <ShieldAlert className="h-3 w-3" />;
 
   const getModeBadge = (mode?: string) => {
     switch (mode) {
@@ -147,133 +240,81 @@ export default function SearchPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="space-y-8 max-w-3xl">
 
-            {/* ── Synthesis column ── */}
-            <div className="lg:col-span-8 space-y-8">
-              {currentSynthesis ? (
-                <div
-                  dir="auto"
-                  className={cn(
-                    "prose prose-invert max-w-none",
-                    "[&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground",
-                    "[&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground",
-                    "[&_strong]:text-white [&_a]:text-primary [&_code]:text-primary",
-                    "[&_blockquote]:border-primary [&_blockquote]:text-muted-foreground",
-                  )}
-                >
-                  <ReactMarkdown>{currentSynthesis}</ReactMarkdown>
-                  {isStreaming && (
-                    <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle" />
-                  )}
-                </div>
-              ) : !isStreaming && (
-                <div className="space-y-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-[90%]" />
-                  <Skeleton className="h-4 w-[95%]" />
-                  <Skeleton className="h-4 w-[80%]" />
-                </div>
-              )}
+            {/* ── Grok-style source cards ── */}
+            {((displayData?.sources && displayData.sources.length > 0) || isStreaming) && (
+              <SourceCards sources={displayData?.sources || []} isStreaming={isStreaming} />
+            )}
 
-              {/* Follow-up suggestions */}
-              {displayData && !isStreaming && (
-                <div className="border-t border-border pt-8 mt-12 animate-in fade-in slide-in-from-bottom-4">
-                  <h3 className="text-lg font-mono font-bold mb-4 flex items-center gap-2">
-                    <SearchIcon className="w-5 h-5 text-muted-foreground" />
-                    Explore Further
-                  </h3>
-                  <div className="flex flex-wrap gap-3">
-                    {displayData.followUps?.map((q: string, i: number) => (
-                      <button
-                        key={i}
-                        onClick={() => startFollowUp(displayData.id, q)}
-                        dir="auto"
-                        className="px-4 py-2 rounded-lg bg-card border border-border hover:border-primary/50 hover:bg-primary/5 text-sm text-left transition-colors flex items-center gap-2 group"
-                      >
-                        {q}
-                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all -ml-2 group-hover:ml-0" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Sources sidebar ── */}
-            <div className="lg:col-span-4 space-y-8">
+            {/* ── Synthesis ── */}
+            {currentSynthesis ? (
+              <div
+                dir="auto"
+                className={cn(
+                  "prose prose-invert max-w-none",
+                  "[&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground",
+                  "[&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground",
+                  "[&_strong]:text-white [&_a]:text-primary [&_code]:text-primary",
+                  "[&_blockquote]:border-primary [&_blockquote]:text-muted-foreground",
+                )}
+              >
+                <ReactMarkdown>{currentSynthesis}</ReactMarkdown>
+                {isStreaming && (
+                  <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle" />
+                )}
+              </div>
+            ) : !isStreaming && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-border pb-2">
-                  <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground">Sources Cited</h3>
-                  <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{displayData?.sources?.length || 0}</span>
-                </div>
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-[90%]" />
+                <Skeleton className="h-4 w-[95%]" />
+                <Skeleton className="h-4 w-[80%]" />
+              </div>
+            )}
 
-                <div className="space-y-3">
-                  {(displayData?.sources || []).map((source: any, i: number) => (
-                    <Card key={i} className="bg-card/50 hover:bg-card transition-colors border-border/50 overflow-hidden group">
-                      <CardContent className="p-4 relative">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-muted group-hover:bg-primary/50 transition-colors" />
-                        <div className="flex items-start justify-between gap-2 mb-2 pl-2">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            <span className="text-xs font-mono text-muted-foreground">[{i + 1}]</span>
-                            <span className="text-xs font-medium truncate">{source.domain}</span>
-                          </div>
-                          <div className={cn("flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-mono shrink-0", getCredibilityColor(source.credibilityScore))}>
-                            {getCredibilityIcon(source.credibilityScore)}
-                            {Math.round(source.credibilityScore * 100)}%
-                          </div>
-                        </div>
-                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="pl-2 block group-hover:text-primary transition-colors">
-                          <h4 dir="auto" className="font-medium text-sm line-clamp-2 mb-1">{source.title}</h4>
-                          <p  dir="auto" className="text-xs text-muted-foreground line-clamp-2">{source.snippet}</p>
-                        </a>
-                        <a
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="pl-2 mt-1 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <ExternalLink className="h-2.5 w-2.5" />
-                          {source.url.slice(0, 40)}...
-                        </a>
-                      </CardContent>
-                    </Card>
+            {/* ── Related queries ── */}
+            {displayData?.relatedQueries && displayData.relatedQueries.length > 0 && !isStreaming && (
+              <div className="space-y-3 pt-2">
+                <h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Related</h3>
+                <div className="flex flex-col gap-1">
+                  {displayData.relatedQueries.map((q: string, i: number) => (
+                    <button
+                      key={i}
+                      onClick={() => startSearch(q, (displayData.mode as any) || "deep")}
+                      dir="auto"
+                      className="text-sm text-left text-muted-foreground hover:text-foreground flex items-center gap-2 group py-1.5 border-b border-border/40 last:border-0"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5 text-primary/40 group-hover:text-primary transition-colors shrink-0" />
+                      {q}
+                    </button>
                   ))}
-
-                  {isStreaming && (
-                    <div className="space-y-3 opacity-50">
-                      {[1, 2].map((i) => (
-                        <Card key={i} className="bg-card/30 border-border/30">
-                          <CardContent className="p-4 space-y-2">
-                            <div className="flex gap-2"><Skeleton className="w-4 h-4" /><Skeleton className="w-24 h-4" /></div>
-                            <Skeleton className="w-full h-8" />
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
+            )}
 
-              {/* Related queries */}
-              {displayData?.relatedQueries && displayData.relatedQueries.length > 0 && !isStreaming && (
-                <div className="space-y-4 pt-4 border-t border-border">
-                  <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground">Related</h3>
-                  <div className="flex flex-col gap-2">
-                    {displayData.relatedQueries.map((q: string, i: number) => (
-                      <button
-                        key={i}
-                        onClick={() => startSearch(q, (displayData.mode as any) || "deep")}
-                        dir="auto"
-                        className="text-sm text-left text-muted-foreground hover:text-foreground hover:underline decoration-primary/50 underline-offset-4 py-1"
-                      >
-                        {q}
-                      </button>
-                    ))}
-                  </div>
+            {/* ── Follow-up suggestions ── */}
+            {displayData && !isStreaming && (
+              <div className="border-t border-border pt-8 mt-12 animate-in fade-in slide-in-from-bottom-4">
+                <h3 className="text-lg font-mono font-bold mb-4 flex items-center gap-2">
+                  <SearchIcon className="w-5 h-5 text-muted-foreground" />
+                  Explore Further
+                </h3>
+                <div className="flex flex-wrap gap-3">
+                  {displayData.followUps?.map((q: string, i: number) => (
+                    <button
+                      key={i}
+                      onClick={() => startFollowUp(displayData.id, q)}
+                      dir="auto"
+                      className="px-4 py-2 rounded-lg bg-card border border-border hover:border-primary/50 hover:bg-primary/5 text-sm text-left transition-colors flex items-center gap-2 group"
+                    >
+                      {q}
+                      <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all -ml-2 group-hover:ml-0" />
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
