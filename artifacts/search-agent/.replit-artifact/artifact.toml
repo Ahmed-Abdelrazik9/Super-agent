@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Deep Search Agent"
+version = "1.0.0"
+id = "artifacts/search-agent"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24961
+
+[services.development]
+run = "pnpm --filter @workspace/search-agent run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/search-agent", "run", "build" ]
+publicDir = "artifacts/search-agent/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24961"
+BASE_PATH = "/"

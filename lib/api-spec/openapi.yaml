@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Deep Search Agent API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: search
+    description: Search operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /search:
+    post:
+      operationId: createSearch
+      tags: [search]
+      summary: Create a new search (streaming SSE)
+      description: Initiates a deep search — returns SSE stream with AI synthesis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSearchBody"
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /search/history:
+    get:
+      operationId: listSearchHistory
+      tags: [search]
+      summary: Get recent search history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: number
+        - name: offset
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of recent searches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchHistoryList"
+
+  /search/trending:
+    get:
+      operationId: getTrendingTopics
+      tags: [search]
+      summary: Get trending search topics
+      responses:
+        "200":
+          description: Trending topics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendingTopics"
+
+  /search/stats:
+    get:
+      operationId: getSearchStats
+      tags: [search]
+      summary: Get search statistics overview
+      responses:
+        "200":
+          description: Search statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchStats"
+
+  /search/{id}:
+    get:
+      operationId: getSearch
+      tags: [search]
+      summary: Get a specific search result
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search result with sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSearch
+      tags: [search]
+      summary: Delete a search from history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /search/{id}/follow-up:
+    post:
+      operationId: createFollowUp
+      tags: [search]
+      summary: Ask a follow-up question on an existing search (streaming SSE)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpBody"
+      responses:
+        "200":
+          description: SSE stream
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +160,170 @@ components:
       required:
         - status
 
+    CreateSearchBody:
+      type: object
+      properties:
+        query:
+          type: string
+        mode:
+          type: string
+          enum: [quick, deep, expert]
+      required:
+        - query
+
+    FollowUpBody:
+      type: object
+      properties:
+        question:
+          type: string
+      required:
+        - question
+
+    SearchSource:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        snippet:
+          type: string
+        credibilityScore:
+          type: number
+        domain:
+          type: string
+        publishedDate:
+          type: string
+          nullable: true
+      required:
+        - title
+        - url
+        - snippet
+        - credibilityScore
+        - domain
+
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        query:
+          type: string
+        mode:
+          type: string
+        synthesis:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchSource"
+        followUps:
+          type: array
+          items:
+            type: string
+        relatedQueries:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        duration:
+          type: number
+          description: Search duration in milliseconds
+      required:
+        - id
+        - query
+        - mode
+        - synthesis
+        - sources
+        - followUps
+        - relatedQueries
+        - createdAt
+        - duration
+
+    SearchHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        query:
+          type: string
+        mode:
+          type: string
+        sourceCount:
+          type: number
+        createdAt:
+          type: string
+        previewText:
+          type: string
+      required:
+        - id
+        - query
+        - mode
+        - sourceCount
+        - createdAt
+        - previewText
+
+    SearchHistoryList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHistoryItem"
+        total:
+          type: number
+      required:
+        - items
+        - total
+
+    TrendingTopics:
+      type: object
+      properties:
+        topics:
+          type: array
+          items:
+            type: object
+            properties:
+              topic:
+                type: string
+              category:
+                type: string
+              searchCount:
+                type: number
+            required:
+              - topic
+              - category
+              - searchCount
+      required:
+        - topics
+
+    SearchStats:
+      type: object
+      properties:
+        totalSearches:
+          type: number
+        totalSources:
+          type: number
+        avgSourcesPerSearch:
+          type: number
+        avgDuration:
+          type: number
+        topModes:
+          type: array
+          items:
+            type: object
+            properties:
+              mode:
+                type: string
+              count:
+                type: number
+            required:
+              - mode
+              - count
+      required:
+        - totalSearches
+        - totalSources
+        - avgSourcesPerSearch
+        - avgDuration
+        - topModes
