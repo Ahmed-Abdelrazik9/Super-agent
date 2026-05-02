@@ -91,6 +91,7 @@ function SidebarItem({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={commitEdit}
+            dir="auto"
             className="flex-1 min-w-0 bg-background border border-primary/40 rounded px-1.5 py-0.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary/60"
             onClick={(e) => e.stopPropagation()}
           />
@@ -113,7 +114,7 @@ function SidebarItem({
         <>
           <Link href={href} className="flex items-center gap-2 flex-1 min-w-0">
             <ModeIcon mode={item.mode} />
-            <span className="truncate text-sm leading-snug">{displayName}</span>
+            <span dir="auto" className="truncate text-sm leading-snug">{displayName}</span>
           </Link>
           <button
             data-testid={`button-rename-search-${item.id}`}

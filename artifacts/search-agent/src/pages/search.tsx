@@ -102,7 +102,7 @@ export default function SearchPage() {
             
             {/* Main Content: Synthesis */}
             <div className="lg:col-span-8 space-y-8">
-              <div className={cn("prose prose-invert max-w-none [&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground [&_strong]:text-white [&_a]:text-primary [&_code]:text-primary [&_blockquote]:border-primary [&_blockquote]:text-muted-foreground", isStreaming && "opacity-90")}>
+              <div dir="auto" className={cn("prose prose-invert max-w-none [&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground [&_strong]:text-white [&_a]:text-primary [&_code]:text-primary [&_blockquote]:border-primary [&_blockquote]:text-muted-foreground", isStreaming && "opacity-90")}>
                 {currentSynthesis ? (
                   <ReactMarkdown>{currentSynthesis}</ReactMarkdown>
                 ) : (
@@ -130,6 +130,7 @@ export default function SearchPage() {
                       <button
                         key={i}
                         onClick={() => startFollowUp(displayData.id, q)}
+                        dir="auto"
                         className="px-4 py-2 rounded-lg bg-card border border-border hover:border-primary/50 hover:bg-primary/5 text-sm text-left transition-colors flex items-center gap-2 group"
                       >
                         {q}
@@ -167,8 +168,8 @@ export default function SearchPage() {
                           </div>
                         </div>
                         <a href={source.url} target="_blank" rel="noopener noreferrer" className="pl-2 block group-hover:text-primary transition-colors">
-                          <h4 className="font-medium text-sm line-clamp-2 mb-1">{source.title}</h4>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{source.snippet}</p>
+                          <h4 dir="auto" className="font-medium text-sm line-clamp-2 mb-1">{source.title}</h4>
+                          <p dir="auto" className="text-xs text-muted-foreground line-clamp-2">{source.snippet}</p>
                         </a>
                       </CardContent>
                     </Card>
@@ -198,6 +199,7 @@ export default function SearchPage() {
                       <button
                         key={i}
                         onClick={() => startSearch(q, (displayData.mode as any) || "deep")}
+                        dir="auto"
                         className="text-sm text-left text-muted-foreground hover:text-foreground hover:underline decoration-primary/50 underline-offset-4 py-1"
                       >
                         {q}

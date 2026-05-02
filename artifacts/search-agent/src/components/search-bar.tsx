@@ -48,6 +48,7 @@ export function SearchBar({ onSearch, onStop, isSearching, initialQuery = "", in
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder="Ask anything..."
+          dir="auto"
           className="flex-1 bg-transparent border-none outline-none text-lg text-foreground placeholder:text-muted-foreground disabled:opacity-50"
           disabled={isSearching}
         />
