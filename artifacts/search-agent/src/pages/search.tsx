@@ -102,7 +102,7 @@ export default function SearchPage() {
             
             {/* Main Content: Synthesis */}
             <div className="lg:col-span-8 space-y-8">
-              <div className={cn("prose prose-invert prose-cyan max-w-none", isStreaming && "opacity-80")}>
+              <div className={cn("prose prose-invert max-w-none [&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground [&_strong]:text-white [&_a]:text-primary [&_code]:text-primary [&_blockquote]:border-primary [&_blockquote]:text-muted-foreground", isStreaming && "opacity-90")}>
                 {currentSynthesis ? (
                   <ReactMarkdown>{currentSynthesis}</ReactMarkdown>
                 ) : (
