@@ -6,16 +6,25 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import SearchPage from "@/pages/search";
 import HistoryPage from "@/pages/history";
+import ImagesPage from "@/pages/images";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 2,
+    },
+  },
+});
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/search/:id" component={SearchPage} />
-      <Route path="/history" component={HistoryPage} />
-      <Route component={NotFound} />
+      <Route path="/"            component={Home}        />
+      <Route path="/search/:id"  component={SearchPage}  />
+      <Route path="/images"      component={ImagesPage}  />
+      <Route path="/history"     component={HistoryPage} />
+      <Route                     component={NotFound}    />
     </Switch>
   );
 }
