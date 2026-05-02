@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Layout from "@/components/layout";
 import { SearchBar, type SearchMode } from "@/components/search-bar";
 import { SearchProgress } from "@/components/search-progress";
@@ -10,8 +11,10 @@ export default function Home() {
     isSearching, status, searchQueries, synthesis,
   } = useSearchStream();
   const [, setLocation] = useLocation();
+  const [activeMode, setActiveMode] = useState<SearchMode>("deep");
 
   const handleSearch = (query: string, mode: SearchMode) => {
+    setActiveMode(mode);
     if (mode === "images") {
       setLocation(`/images?q=${encodeURIComponent(query)}`);
     } else {
@@ -52,7 +55,7 @@ export default function Home() {
           <div className="w-full max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <SearchProgress
               query={status?.message.startsWith("Initiating") ? "Searching..." : synthesis ? synthesis.slice(0, 80) : (searchQueries[0] ?? "...")}
-              mode="deep"
+              mode={activeMode as any}
               status={status}
               searchQueries={searchQueries}
               synthesis={synthesis}

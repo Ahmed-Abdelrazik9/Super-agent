@@ -136,7 +136,10 @@ export default function SearchPage() {
   // Extract the user's query for the progress display (from the follow-up or loaded result)
   const activeQuery = displayData?.query ?? "";
 
+  const [currentMode, setCurrentMode] = useState<SearchMode>("deep");
+
   const handleSearch = (q: string, mode: SearchMode) => {
+    setCurrentMode(mode);
     if (mode === "images") {
       setLocation(`/images?q=${encodeURIComponent(q)}`);
     } else {
@@ -195,7 +198,7 @@ export default function SearchPage() {
             <div className="flex justify-center py-4">
               <SearchProgress
                 query={activeQuery || searchQueries[0] || "Searching..."}
-                mode={displayData?.mode || "deep"}
+                mode={currentMode as any}
                 status={status}
                 searchQueries={searchQueries}
                 synthesis={streamingSynthesis}
@@ -208,7 +211,7 @@ export default function SearchPage() {
             <div className="space-y-4">
               <SearchProgress
                 query={activeQuery || searchQueries[0] || "Searching..."}
-                mode={displayData?.mode || "deep"}
+                mode={currentMode as any}
                 status={status}
                 searchQueries={searchQueries}
                 synthesis=""
@@ -281,7 +284,7 @@ export default function SearchPage() {
                   {displayData.relatedQueries.map((q: string, i: number) => (
                     <button
                       key={i}
-                      onClick={() => startSearch(q, (displayData.mode as any) || "deep")}
+                      onClick={() => startSearch(q, (currentMode || displayData.mode as any) || "deep")}
                       dir="auto"
                       className="text-sm text-left text-muted-foreground hover:text-foreground flex items-center gap-2 group py-1.5 border-b border-border/40 last:border-0"
                     >
