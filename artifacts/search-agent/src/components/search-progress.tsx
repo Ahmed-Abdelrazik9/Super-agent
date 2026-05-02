@@ -70,29 +70,40 @@ function extractLiveSources(text: string): LiveSource[] {
 
 function SourceCard({ src, index }: { src: LiveSource; index: number }) {
   const [imgOk, setImgOk] = useState(true);
+  const shortUrl = src.url.replace(/^https?:\/\//, "").slice(0, 35);
   return (
     <a
       href={src.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="source-card-enter group flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border/60 bg-card/80 hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 cursor-pointer"
+      className="source-card-enter group flex flex-col gap-2 p-3 rounded-xl border border-border/60 bg-card/70 hover:bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200 flex-shrink-0 min-w-[160px] max-w-[200px]"
       style={{ animationDelay: `${index * 80}ms` }}
-      title={src.title}
     >
-      {imgOk ? (
-        <img
-          src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
-          alt=""
-          className="w-4 h-4 rounded-sm flex-shrink-0"
-          onError={() => setImgOk(false)}
-        />
-      ) : (
-        <Globe className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-      )}
-      <span className="text-xs font-medium text-foreground/80 whitespace-nowrap max-w-[120px] truncate">
-        {src.domain}
-      </span>
-      <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover:text-primary/60 flex-shrink-0 transition-colors" />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {imgOk ? (
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
+              alt=""
+              className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
+              onError={() => setImgOk(false)}
+            />
+          ) : (
+            <Globe className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          )}
+          <span className="text-xs text-muted-foreground font-medium truncate">{src.domain}</span>
+        </div>
+        <span className="text-[10px] font-mono text-muted-foreground/50 bg-muted/50 px-1.5 py-0.5 rounded flex-shrink-0">
+          {index + 1}
+        </span>
+      </div>
+      <p className="text-xs text-foreground/80 line-clamp-2 leading-relaxed">
+        {src.title !== src.domain ? src.title : src.domain}
+      </p>
+      <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40 group-hover:text-primary/50 transition-colors">
+        <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+        <span className="truncate">{shortUrl}</span>
+      </div>
     </a>
   );
 }
@@ -281,11 +292,17 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
         {/* ── Live source website cards ─────────────────────── */}
         {liveSources.length > 0 && (
           <div className="space-y-2.5 animate-in fade-in duration-300">
-            <div className="flex items-center gap-2">
-              <Globe className="h-3 w-3 text-primary/60" style={{ animation: "read-pulse 1.5s ease-in-out infinite" }} />
-              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                Reading {liveSources.length} source{liveSources.length > 1 ? "s" : ""}
-              </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Globe className="h-3 w-3 text-primary/60" style={{ animation: "read-pulse 1.5s ease-in-out infinite" }} />
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  Sources
+                </p>
+                <span className="text-[10px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                  {liveSources.length}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-primary/60 animate-pulse">reading...</span>
             </div>
             <div className="sources-scroll flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               {liveSources.map((src, i) => (
