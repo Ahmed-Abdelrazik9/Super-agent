@@ -1,15 +1,19 @@
-import { useGetTrendingTopics, useGetSearchStats } from "@workspace/api-client-react";
+import { useGetTrendingTopics } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { SearchBar, type SearchMode } from "@/components/search-bar";
 import { SearchProgress } from "@/components/search-progress";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { useLocation } from "wouter";
-import { Activity, Database, Clock, TrendingUp, Image } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Zap, Globe, Brain } from "lucide-react";
+
+const FEATURES = [
+  { icon: Globe,  label: "Real-time web",   desc: "Live results from across the web" },
+  { icon: Brain,  label: "AI synthesis",    desc: "Deep analysis, not just links" },
+  { icon: Zap,    label: "Three modes",     desc: "Quick, Deep, or Expert search" },
+];
 
 export default function Home() {
   const { data: trendingTopics } = useGetTrendingTopics();
-  const { data: searchStats }    = useGetSearchStats();
   const {
     startSearch, stopSearch,
     isSearching, status, searchQueries, synthesis,
@@ -26,22 +30,25 @@ export default function Home() {
 
   return (
     <Layout>
-      <div className="h-full flex flex-col items-center p-6 max-w-5xl mx-auto w-full">
+      <div className="h-full flex flex-col items-center px-6 max-w-4xl mx-auto w-full">
 
+        {/* ── Hero ── */}
         {!isSearching && (
-          <div className="w-full text-center mb-12 mt-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">
-              Nexus<span className="text-primary">Search</span>
+          <div className="w-full text-center mt-20 mb-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <h1 className="text-6xl md:text-7xl font-extrabold tracking-tight mb-3">
+              <span className="text-foreground">Nexus</span>
+              <span className="text-primary">Search</span>
             </h1>
-            <p className="text-muted-foreground text-lg md:text-xl font-mono max-w-2xl mx-auto">
-              Elite intelligence for power users. Unrestricted.
+            <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+              AI-powered deep research. Search anything, get everything.
             </p>
           </div>
         )}
 
-        {isSearching && <div className="mt-8 w-full" />}
+        {isSearching && <div className="mt-10 w-full" />}
 
-        <div className={`w-full mb-8 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-150 ${isSearching ? "max-w-3xl mx-auto" : ""}`}>
+        {/* ── Search bar ── */}
+        <div className={`w-full mb-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100 ${isSearching ? "max-w-3xl mx-auto" : ""}`}>
           <SearchBar
             onSearch={handleSearch}
             onStop={stopSearch}
@@ -49,7 +56,7 @@ export default function Home() {
           />
         </div>
 
-        {/* ── Searching: show animated progress ── */}
+        {/* ── Live search progress ── */}
         {isSearching && (
           <div className="w-full max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <SearchProgress
@@ -62,82 +69,49 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Idle: trending + stats ── */}
+        {/* ── Idle content ── */}
         {!isSearching && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full animate-in fade-in slide-in-from-bottom-12 duration-700 delay-300">
+          <div className="w-full space-y-10 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-200">
 
-            {/* Trending Topics */}
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-4">
-                <TrendingUp className="h-5 w-5" />
-                <h2 className="font-mono text-sm uppercase tracking-wider">Trending Intelligence</h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {trendingTopics?.topics?.map((topic) => (
-                  <button
-                    key={topic.topic}
-                    onClick={() => handleSearch(topic.topic, "deep")}
-                    className="px-4 py-2 rounded-full border border-border bg-card hover:border-primary/50 hover:bg-primary/10 text-sm transition-all text-foreground text-left flex flex-col"
-                  >
-                    <span className="font-medium">{topic.topic}</span>
-                    <span className="text-xs text-muted-foreground font-mono mt-1">
-                      {topic.category} • {topic.searchCount.toLocaleString()} queries
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                <Image className="h-4 w-4 text-pink-400" />
-                <span className="text-xs font-mono uppercase tracking-wider text-pink-400">Image Searches</span>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {["Space photography", "AI art 2025", "Quantum computers", "Mars surface"].map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => handleSearch(q, "images")}
-                    className="px-3 py-1.5 rounded-full border border-pink-500/30 bg-pink-500/5 hover:bg-pink-500/15 hover:border-pink-400/60 text-xs text-pink-300 transition-all font-mono"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+            {/* Feature pills */}
+            <div className="flex flex-wrap justify-center gap-3">
+              {FEATURES.map(({ icon: Icon, label, desc }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-border/60 bg-card/60 text-sm"
+                >
+                  <Icon className="h-4 w-4 text-primary shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium text-foreground text-xs">{label}</p>
+                    <p className="text-muted-foreground text-[11px]">{desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* System Stats */}
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-4">
-                <Activity className="h-5 w-5" />
-                <h2 className="font-mono text-sm uppercase tracking-wider">System Telemetry</h2>
+            {/* Trending */}
+            {trendingTopics?.topics && trendingTopics.topics.length > 0 && (
+              <div>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 text-center">
+                  Trending searches
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {trendingTopics.topics.slice(0, 8).map((topic) => (
+                    <button
+                      key={topic.topic}
+                      onClick={() => handleSearch(topic.topic, "deep")}
+                      className="px-4 py-2 rounded-full border border-border/70 bg-card/50 hover:border-primary/50 hover:bg-primary/10 text-sm text-foreground/80 hover:text-foreground transition-all duration-200"
+                    >
+                      {topic.topic}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="bg-card/50 backdrop-blur border-border">
-                  <CardContent className="p-4 flex flex-col">
-                    <Database className="h-5 w-5 text-primary mb-2" />
-                    <span className="text-2xl font-bold font-mono">
-                      {searchStats?.totalSources
-                        ? (searchStats.totalSources / 1_000_000).toFixed(1) + "M"
-                        : "---"}
-                    </span>
-                    <span className="text-xs text-muted-foreground uppercase">Sources Indexed</span>
-                  </CardContent>
-                </Card>
-                <Card className="bg-card/50 backdrop-blur border-border">
-                  <CardContent className="p-4 flex flex-col">
-                    <Clock className="h-5 w-5 text-primary mb-2" />
-                    <span className="text-2xl font-bold font-mono">
-                      {searchStats?.avgDuration
-                        ? (searchStats.avgDuration / 1000).toFixed(2) + "s"
-                        : "---"}
-                    </span>
-                    <span className="text-xs text-muted-foreground uppercase">Avg Query Time</span>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            )}
 
           </div>
         )}
+
       </div>
     </Layout>
   );
