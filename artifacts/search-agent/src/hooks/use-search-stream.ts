@@ -10,6 +10,8 @@ export type StreamStatus = {
 
 export type StreamResult = {
   id: string;
+  query: string;
+  mode: string;
   synthesis: string;
   sources: any[];
   followUps: string[];
@@ -17,24 +19,29 @@ export type StreamResult = {
   duration: number;
 };
 
+function extractSearchQuery(message: string): string | null {
+  const m = message.match(/Searching:\s*"([^"]+)"/);
+  return m ? m[1] : null;
+}
+
 export function useSearchStream() {
-  const [isSearching, setIsSearching] = useState(false);
-  const [synthesis, setSynthesis] = useState("");
-  const [status, setStatus] = useState<StreamStatus | null>(null);
-  const [result, setResult] = useState<StreamResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const [, setLocation] = useLocation();
+  const [isSearching, setIsSearching]       = useState(false);
+  const [synthesis, setSynthesis]           = useState("");
+  const [status, setStatus]                 = useState<StreamStatus | null>(null);
+  const [searchQueries, setSearchQueries]   = useState<string[]>([]);
+  const [result, setResult]                 = useState<StreamResult | null>(null);
+  const [error, setError]                   = useState<string | null>(null);
+  const abortControllerRef                  = useRef<AbortController | null>(null);
+  const [, setLocation]                     = useLocation();
 
   const startSearch = useCallback(async (query: string, mode: SearchMode) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
     setIsSearching(true);
     setSynthesis("");
     setStatus(null);
+    setSearchQueries([]);
     setResult(null);
     setError(null);
 
@@ -46,17 +53,12 @@ export function useSearchStream() {
         signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to start search");
-      }
+      if (!response.ok) throw new Error("Failed to start search");
+      if (!response.body) throw new Error("No response body");
 
-      if (!response.body) {
-        throw new Error("No response body");
-      }
-
-      const reader = response.body.getReader();
+      const reader  = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer    = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -73,12 +75,12 @@ export function useSearchStream() {
           } else if (line.startsWith("data: ")) {
             const dataStr = line.slice(6).trim();
             if (!dataStr) continue;
-
             try {
               const data = JSON.parse(dataStr);
-              
               if (eventType === "status") {
                 setStatus(data);
+                const q = extractSearchQuery(data.message);
+                if (q) setSearchQueries((prev) => (prev.includes(q) ? prev : [...prev, q]));
               } else if (eventType === "delta") {
                 setSynthesis((prev) => prev + data.content);
               } else if (eventType === "complete") {
@@ -89,9 +91,7 @@ export function useSearchStream() {
                 setError(data.message);
                 setIsSearching(false);
               }
-            } catch (err) {
-              console.error("Error parsing SSE data", err);
-            }
+            } catch { /* ignore parse errors */ }
           }
         }
       }
@@ -104,13 +104,13 @@ export function useSearchStream() {
   }, [setLocation]);
 
   const startFollowUp = useCallback(async (id: string, question: string) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
 
     setIsSearching(true);
+    setSynthesis("");
     setStatus(null);
+    setSearchQueries([]);
     setError(null);
 
     try {
@@ -121,17 +121,12 @@ export function useSearchStream() {
         signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to start follow-up");
-      }
+      if (!response.ok) throw new Error("Failed to start follow-up");
+      if (!response.body) throw new Error("No response body");
 
-      if (!response.body) {
-        throw new Error("No response body");
-      }
-
-      const reader = response.body.getReader();
+      const reader  = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer    = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -148,12 +143,12 @@ export function useSearchStream() {
           } else if (line.startsWith("data: ")) {
             const dataStr = line.slice(6).trim();
             if (!dataStr) continue;
-
             try {
               const data = JSON.parse(dataStr);
-              
               if (eventType === "status") {
                 setStatus(data);
+                const q = extractSearchQuery(data.message);
+                if (q) setSearchQueries((prev) => (prev.includes(q) ? prev : [...prev, q]));
               } else if (eventType === "delta") {
                 setSynthesis((prev) => prev + data.content);
               } else if (eventType === "complete") {
@@ -163,9 +158,7 @@ export function useSearchStream() {
                 setError(data.message);
                 setIsSearching(false);
               }
-            } catch (err) {
-              console.error("Error parsing SSE data", err);
-            }
+            } catch { /* ignore */ }
           }
         }
       }
@@ -178,10 +171,8 @@ export function useSearchStream() {
   }, []);
 
   const stopSearch = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsSearching(false);
-    }
+    abortControllerRef.current?.abort();
+    setIsSearching(false);
   }, []);
 
   return {
@@ -191,6 +182,7 @@ export function useSearchStream() {
     isSearching,
     synthesis,
     status,
+    searchQueries,
     result,
     error,
   };

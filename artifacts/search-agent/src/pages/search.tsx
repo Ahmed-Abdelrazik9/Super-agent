@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import Layout from "@/components/layout";
 import { SearchBar, type SearchMode } from "@/components/search-bar";
+import { SearchProgress } from "@/components/search-progress";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { useGetSearch, getGetSearchQueryKey } from "@workspace/api-client-react";
 import ReactMarkdown from "react-markdown";
@@ -14,8 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export default function SearchPage() {
-  const { id }            = useParams<{ id: string }>();
-  const [, setLocation]   = useLocation();
+  const { id }          = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
 
   const { data: searchData, isLoading } = useGetSearch(id || "", {
     query: { enabled: !!id, queryKey: getGetSearchQueryKey(id || "") },
@@ -23,12 +23,15 @@ export default function SearchPage() {
 
   const {
     startSearch, startFollowUp, stopSearch,
-    isSearching, status, synthesis: streamingSynthesis, result,
+    isSearching, status, searchQueries, synthesis: streamingSynthesis, result,
   } = useSearchStream();
 
-  const displayData       = result || searchData;
-  const isStreaming       = isSearching;
-  const currentSynthesis  = isStreaming ? streamingSynthesis : displayData?.synthesis;
+  const displayData      = result || searchData;
+  const isStreaming      = isSearching;
+  const currentSynthesis = isStreaming ? streamingSynthesis : displayData?.synthesis;
+
+  // Extract the user's query for the progress display (from the follow-up or loaded result)
+  const activeQuery = displayData?.query ?? "";
 
   const handleSearch = (q: string, mode: SearchMode) => {
     if (mode === "images") {
@@ -94,68 +97,86 @@ export default function SearchPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">
-              {displayData?.query || "Searching..."}
-            </h1>
-            <div className="flex items-center gap-2">
-              {displayData && getModeBadge(displayData.mode)}
-              {displayData?.duration && (
-                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
-                  {(displayData.duration / 1000).toFixed(2)}s
-                </span>
-              )}
-              {/* Quick image search for same query */}
-              {displayData?.query && (
+          {/* ── Follow-up searching: full progress view ── */}
+          {isStreaming && !streamingSynthesis && (
+            <div className="flex justify-center py-4">
+              <SearchProgress
+                query={activeQuery || searchQueries[0] || "Searching..."}
+                mode={displayData?.mode || "deep"}
+                status={status}
+                searchQueries={searchQueries}
+                synthesis={streamingSynthesis}
+              />
+            </div>
+          )}
+
+          {/* ── Compact progress + streaming synthesis ── */}
+          {isStreaming && streamingSynthesis && (
+            <div className="space-y-4">
+              <SearchProgress
+                query={activeQuery || searchQueries[0] || "Searching..."}
+                mode={displayData?.mode || "deep"}
+                status={status}
+                searchQueries={searchQueries}
+                synthesis=""
+                compact
+              />
+            </div>
+          )}
+
+          {/* ── Title row (only when we have data and not in full-progress mode) ── */}
+          {(!isStreaming || streamingSynthesis) && displayData && (
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h1 className="text-3xl font-bold tracking-tight" dir="auto">
+                {displayData.query}
+              </h1>
+              <div className="flex items-center gap-2">
+                {getModeBadge(displayData.mode)}
+                {displayData.duration && (
+                  <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                    {(displayData.duration / 1000).toFixed(2)}s
+                  </span>
+                )}
                 <button
                   onClick={() => setLocation(`/images?q=${encodeURIComponent(displayData.query)}`)}
                   className="flex items-center gap-1.5 text-xs px-2 py-1 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded hover:bg-pink-500/20 transition-colors font-mono"
                 >
                   <Image className="w-3 h-3" /> Images
                 </button>
-              )}
-            </div>
-          </div>
-
-          {/* Status during streaming */}
-          {isStreaming && status && (
-            <div className="flex items-center gap-3 text-primary bg-primary/5 border border-primary/20 p-4 rounded-lg animate-in fade-in">
-              <div className="h-3 w-3 bg-primary rounded-full animate-pulse" />
-              <span className="font-mono text-sm uppercase tracking-wider">{status.phase}: {status.message}</span>
+              </div>
             </div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            {/* Main: Synthesis */}
+            {/* ── Synthesis column ── */}
             <div className="lg:col-span-8 space-y-8">
-              <div
-                dir="auto"
-                className={cn(
-                  "prose prose-invert max-w-none",
-                  "[&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground",
-                  "[&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground",
-                  "[&_strong]:text-white [&_a]:text-primary [&_code]:text-primary",
-                  "[&_blockquote]:border-primary [&_blockquote]:text-muted-foreground",
-                  isStreaming && "opacity-90"
-                )}
-              >
-                {currentSynthesis ? (
+              {currentSynthesis ? (
+                <div
+                  dir="auto"
+                  className={cn(
+                    "prose prose-invert max-w-none",
+                    "[&_*]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground",
+                    "[&_h4]:text-foreground [&_p]:text-foreground [&_li]:text-foreground",
+                    "[&_strong]:text-white [&_a]:text-primary [&_code]:text-primary",
+                    "[&_blockquote]:border-primary [&_blockquote]:text-muted-foreground",
+                  )}
+                >
                   <ReactMarkdown>{currentSynthesis}</ReactMarkdown>
-                ) : (
-                  <div className="space-y-4">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-[90%]" />
-                    <Skeleton className="h-4 w-[95%]" />
-                    <Skeleton className="h-4 w-[80%]" />
-                  </div>
-                )}
-                {isStreaming && (
-                  <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle" />
-                )}
-              </div>
+                  {isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle" />
+                  )}
+                </div>
+              ) : !isStreaming && (
+                <div className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-[90%]" />
+                  <Skeleton className="h-4 w-[95%]" />
+                  <Skeleton className="h-4 w-[80%]" />
+                </div>
+              )}
 
-              {/* Follow-up Section */}
+              {/* Follow-up suggestions */}
               {displayData && !isStreaming && (
                 <div className="border-t border-border pt-8 mt-12 animate-in fade-in slide-in-from-bottom-4">
                   <h3 className="text-lg font-mono font-bold mb-4 flex items-center gap-2">
@@ -163,7 +184,7 @@ export default function SearchPage() {
                     Explore Further
                   </h3>
                   <div className="flex flex-wrap gap-3">
-                    {displayData.followUps?.map((q, i) => (
+                    {displayData.followUps?.map((q: string, i: number) => (
                       <button
                         key={i}
                         onClick={() => startFollowUp(displayData.id, q)}
@@ -179,10 +200,8 @@ export default function SearchPage() {
               )}
             </div>
 
-            {/* Sidebar: Sources & Related */}
+            {/* ── Sources sidebar ── */}
             <div className="lg:col-span-4 space-y-8">
-
-              {/* Sources */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-border pb-2">
                   <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground">Sources Cited</h3>
@@ -190,7 +209,7 @@ export default function SearchPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {(displayData?.sources || []).map((source, i) => (
+                  {(displayData?.sources || []).map((source: any, i: number) => (
                     <Card key={i} className="bg-card/50 hover:bg-card transition-colors border-border/50 overflow-hidden group">
                       <CardContent className="p-4 relative">
                         <div className="absolute top-0 left-0 w-1 h-full bg-muted group-hover:bg-primary/50 transition-colors" />
@@ -236,12 +255,12 @@ export default function SearchPage() {
                 </div>
               </div>
 
-              {/* Related Queries */}
+              {/* Related queries */}
               {displayData?.relatedQueries && displayData.relatedQueries.length > 0 && !isStreaming && (
                 <div className="space-y-4 pt-4 border-t border-border">
                   <h3 className="font-mono text-sm uppercase tracking-wider text-muted-foreground">Related</h3>
                   <div className="flex flex-col gap-2">
-                    {displayData.relatedQueries.map((q, i) => (
+                    {displayData.relatedQueries.map((q: string, i: number) => (
                       <button
                         key={i}
                         onClick={() => startSearch(q, (displayData.mode as any) || "deep")}

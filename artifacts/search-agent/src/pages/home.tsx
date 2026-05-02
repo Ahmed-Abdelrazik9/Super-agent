@@ -1,6 +1,7 @@
 import { useGetTrendingTopics, useGetSearchStats } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { SearchBar, type SearchMode } from "@/components/search-bar";
+import { SearchProgress } from "@/components/search-progress";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { useLocation } from "wouter";
 import { Activity, Database, Clock, TrendingUp, Image } from "lucide-react";
@@ -9,7 +10,10 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function Home() {
   const { data: trendingTopics } = useGetTrendingTopics();
   const { data: searchStats }    = useGetSearchStats();
-  const { startSearch, stopSearch, isSearching, status, synthesis } = useSearchStream();
+  const {
+    startSearch, stopSearch,
+    isSearching, status, searchQueries, synthesis,
+  } = useSearchStream();
   const [, setLocation] = useLocation();
 
   const handleSearch = (query: string, mode: SearchMode) => {
@@ -22,37 +26,43 @@ export default function Home() {
 
   return (
     <Layout>
-      <div className="h-full flex flex-col items-center justify-center p-6 max-w-5xl mx-auto w-full">
+      <div className="h-full flex flex-col items-center p-6 max-w-5xl mx-auto w-full">
 
-        <div className="w-full text-center mb-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">
-            Nexus<span className="text-primary">Search</span>
-          </h1>
-          <p className="text-muted-foreground text-lg md:text-xl font-mono max-w-2xl mx-auto">
-            Elite intelligence for power users. Unrestricted.
-          </p>
-        </div>
+        {!isSearching && (
+          <div className="w-full text-center mb-12 mt-16 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">
+              Nexus<span className="text-primary">Search</span>
+            </h1>
+            <p className="text-muted-foreground text-lg md:text-xl font-mono max-w-2xl mx-auto">
+              Elite intelligence for power users. Unrestricted.
+            </p>
+          </div>
+        )}
 
-        <div className="w-full mb-16 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-150">
+        {isSearching && <div className="mt-8 w-full" />}
+
+        <div className={`w-full mb-8 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-150 ${isSearching ? "max-w-3xl mx-auto" : ""}`}>
           <SearchBar
             onSearch={handleSearch}
             onStop={stopSearch}
             isSearching={isSearching}
           />
-
-          {isSearching && status && (
-            <div className="mt-6 p-4 rounded-lg bg-card/50 border border-primary/30 w-full max-w-3xl mx-auto">
-              <div className="flex items-center gap-3 text-primary mb-2">
-                <div className="h-2 w-2 bg-primary rounded-full animate-pulse" />
-                <span className="font-mono text-sm">{status.phase.toUpperCase()}: {status.message}</span>
-              </div>
-              {synthesis && (
-                <p className="text-sm text-muted-foreground line-clamp-2">{synthesis}</p>
-              )}
-            </div>
-          )}
         </div>
 
+        {/* ── Searching: show animated progress ── */}
+        {isSearching && (
+          <div className="w-full max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <SearchProgress
+              query={status?.message.startsWith("Initiating") ? "Searching..." : synthesis ? synthesis.slice(0, 80) : (searchQueries[0] ?? "...")}
+              mode="deep"
+              status={status}
+              searchQueries={searchQueries}
+              synthesis={synthesis}
+            />
+          </div>
+        )}
+
+        {/* ── Idle: trending + stats ── */}
         {!isSearching && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full animate-in fade-in slide-in-from-bottom-12 duration-700 delay-300">
 
@@ -77,8 +87,7 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Quick image search links */}
-              <div className="mt-4 flex items-center gap-2 text-muted-foreground">
+              <div className="mt-4 flex items-center gap-2">
                 <Image className="h-4 w-4 text-pink-400" />
                 <span className="text-xs font-mono uppercase tracking-wider text-pink-400">Image Searches</span>
               </div>
