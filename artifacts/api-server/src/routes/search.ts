@@ -221,15 +221,7 @@ router.post("/search", async (req, res) => {
   }
 });
 
-// ─── SearXNG public instances (tried in order) ────────────────────────────────
-const SEARXNG_INSTANCES = [
-  "https://searx.be",
-  "https://searxng.world",
-  "https://search.sapti.me",
-  "https://searx.tiekoetter.com",
-];
-
-// ─── GET /search/images — SearXNG image search (no API key, safesearch=0) ─────
+// ─── GET /search/images — Bing image scraper (no API key, ADLT=OFF) ──────────
 router.get("/search/images", async (req, res) => {
   const query = req.query.q as string;
   const page  = Number(req.query.page ?? 0);
@@ -240,54 +232,61 @@ router.get("/search/images", async (req, res) => {
   const cached = trendingCache.get(cacheKey);
   if (cached) { res.json(cached); return; }
 
-  const offset = page * 1 + 1; // SearXNG uses page numbers starting at 1
+  try {
+    const first  = page * 35;
+    const bingUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&count=35&first=${first}&ADLT=OFF&safeSearch=Off`;
 
-  let lastErr: unknown;
-  for (const base of SEARXNG_INSTANCES) {
-    try {
-      const url = `${base}/search?q=${encodeURIComponent(query)}&categories=images&format=json&safesearch=0&language=en&pageno=${offset}`;
-      const imgRes = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
-          "Accept": "application/json",
-        },
-        signal: AbortSignal.timeout(8000),
-      });
+    const htmlRes = await fetch(bingUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://www.bing.com/",
+        "Cookie": "SRCHHPGUSR=ADLT=OFF; _EDGE_S=mkt=en-us",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
 
-      if (!imgRes.ok) { lastErr = new Error(`${base} returned ${imgRes.status}`); continue; }
+    if (!htmlRes.ok) throw new Error(`Bing returned ${htmlRes.status}`);
 
-      const data = await imgRes.json() as {
-        results?: Array<{
-          img_src?: string; url?: string; title?: string;
-          thumbnail_src?: string; source?: string;
-          img_format?: string; filesize?: number;
-        }>;
-      };
+    const html = await htmlRes.text();
 
-      const images = (data.results ?? [])
-        .filter((r) => r.img_src)
-        .slice(0, 80)
-        .map((img) => ({
-          url:       img.img_src!,
-          thumbnail: img.thumbnail_src || img.img_src!,
-          title:     img.title || "",
-          sourceUrl: img.url || img.img_src!,
-          source:    img.source || new URL(img.url || img.img_src!).hostname.replace("www.", ""),
-          width:     0,
-          height:    0,
-        }));
+    // Extract image metadata from the `m` attribute on <a class="iusc"> anchors
+    const images: Array<{
+      url: string; thumbnail: string; title: string;
+      sourceUrl: string; source: string; width: number; height: number;
+    }> = [];
 
-      const payload = { images, query };
-      trendingCache.set(cacheKey, payload, 5 * 60_000);
-      res.json(payload);
-      return;
-    } catch (err) {
-      lastErr = err;
+    const re = /class="iusc"[^>]+m="([^"]+)"/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = re.exec(html)) !== null && images.length < 80) {
+      try {
+        const m = JSON.parse(match[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+        if (!m.murl) continue;
+        const domain = (() => { try { return new URL(m.purl || m.murl).hostname.replace("www.", ""); } catch { return ""; } })();
+        images.push({
+          url:       m.murl,
+          thumbnail: m.turl || m.murl,
+          title:     m.t   || "",
+          sourceUrl: m.purl || m.murl,
+          source:    domain,
+          width:     m.mw  || 0,
+          height:    m.mh  || 0,
+        });
+      } catch { /* skip malformed entries */ }
     }
-  }
 
-  req.log.error({ err: lastErr }, "All SearXNG instances failed");
-  res.status(500).json({ error: "Image search failed. Please try again." });
+    if (images.length === 0) throw new Error("No images parsed from Bing response");
+
+    const payload = { images, query };
+    trendingCache.set(cacheKey, payload, 5 * 60_000);
+    res.json(payload);
+  } catch (err) {
+    req.log.error({ err }, "Bing image scrape failed");
+    res.status(500).json({ error: "Image search failed. Please try again." });
+  }
 });
 
 // ─── GET /search/history ──────────────────────────────────────────────────────
