@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from "react";
-import { Globe, CheckCircle2, Loader2, Zap, Layers, Brain, ArrowRight } from "lucide-react";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { Globe, CheckCircle2, Loader2, Zap, Layers, Brain, ArrowRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SearchProgressProps {
@@ -31,6 +31,72 @@ function ElapsedTimer() {
   );
 }
 
+interface LiveSource {
+  url: string;
+  domain: string;
+  title: string;
+}
+
+function extractLiveSources(text: string): LiveSource[] {
+  const seen = new Set<string>();
+  const results: LiveSource[] = [];
+  // Match markdown links: [title](url)
+  const mdRegex = /\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = mdRegex.exec(text)) !== null) {
+    const [, title, url] = m;
+    try {
+      const domain = new URL(url).hostname.replace("www.", "");
+      if (!seen.has(domain)) {
+        seen.add(domain);
+        results.push({ url, domain, title: title || domain });
+      }
+    } catch {}
+  }
+  // Also match bare URLs wrapped in parentheses like (https://...)
+  const bareRegex = /\((https?:\/\/[^\s)]+)\)/g;
+  while ((m = bareRegex.exec(text)) !== null) {
+    const url = m[1];
+    try {
+      const domain = new URL(url).hostname.replace("www.", "");
+      if (!seen.has(domain)) {
+        seen.add(domain);
+        results.push({ url, domain, title: domain });
+      }
+    } catch {}
+  }
+  return results;
+}
+
+function SourceCard({ src, index }: { src: LiveSource; index: number }) {
+  const [imgOk, setImgOk] = useState(true);
+  return (
+    <a
+      href={src.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="source-card-enter group flex-shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border/60 bg-card/80 hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 cursor-pointer"
+      style={{ animationDelay: `${index * 80}ms` }}
+      title={src.title}
+    >
+      {imgOk ? (
+        <img
+          src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
+          alt=""
+          className="w-4 h-4 rounded-sm flex-shrink-0"
+          onError={() => setImgOk(false)}
+        />
+      ) : (
+        <Globe className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      )}
+      <span className="text-xs font-medium text-foreground/80 whitespace-nowrap max-w-[120px] truncate">
+        {src.domain}
+      </span>
+      <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover:text-primary/60 flex-shrink-0 transition-colors" />
+    </a>
+  );
+}
+
 interface Step {
   key: string;
   label: string;
@@ -40,11 +106,20 @@ interface Step {
 
 export function SearchProgress({ query, mode, status, searchQueries, synthesis, compact = false }: SearchProgressProps) {
   const isSynthesizing = synthesis.length > 0;
+  const liveSources = useMemo(() => extractLiveSources(synthesis), [synthesis]);
 
   const steps: Step[] = [
-    { key: "init",   label: "Query received",       state: "done"   },
-    { key: "search", label: "Searching the web",    state: searchQueries.length > 0 || isSynthesizing ? "done" : "active", sublabel: searchQueries.length > 0 ? `${searchQueries.length} search${searchQueries.length > 1 ? "es" : ""} performed` : undefined },
-    { key: "read",   label: "Reading sources",      state: isSynthesizing ? "done" : searchQueries.length > 0 ? "active" : "pending" },
+    { key: "init",   label: "Query received",       state: "done" },
+    {
+      key: "search", label: "Searching the web",
+      state: searchQueries.length > 0 || isSynthesizing ? "done" : "active",
+      sublabel: searchQueries.length > 0 ? `${searchQueries.length} search${searchQueries.length > 1 ? "es" : ""} performed` : undefined,
+    },
+    {
+      key: "read",   label: "Reading sources",
+      state: isSynthesizing ? (liveSources.length > 0 ? "done" : "active") : searchQueries.length > 0 ? "active" : "pending",
+      sublabel: liveSources.length > 0 ? `${liveSources.length} source${liveSources.length > 1 ? "s" : ""} read` : undefined,
+    },
     { key: "synth",  label: "Synthesizing answer",  state: isSynthesizing ? "active" : "pending" },
   ];
 
@@ -99,8 +174,19 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
           from { opacity: 0; transform: translateY(6px); max-height: 0; }
           to   { opacity: 1; transform: translateY(0);   max-height: 60px; }
         }
-        .step-animate { animation: slide-in-step 0.35s ease-out both; }
-        .query-animate { animation: query-appear 0.3s ease-out both; }
+        @keyframes source-card-enter {
+          from { opacity: 0; transform: translateY(10px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0)    scale(1);    }
+        }
+        @keyframes read-pulse {
+          0%, 100% { opacity: 0.6; }
+          50%      { opacity: 1;   }
+        }
+        .step-animate       { animation: slide-in-step 0.35s ease-out both; }
+        .query-animate      { animation: query-appear 0.3s ease-out both; }
+        .source-card-enter  { animation: source-card-enter 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .sources-scroll::-webkit-scrollbar { display: none; }
+        .sources-scroll { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
       <div className="w-full max-w-xl mx-auto py-8 space-y-8 animate-in fade-in duration-500">
@@ -123,12 +209,9 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
         {/* ── Orb ─────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-36 h-36 flex items-center justify-center">
-            {/* Expanding rings */}
             <div className="absolute w-24 h-24 rounded-full border border-primary/40" style={{ animation: "ring-1 2s ease-out infinite" }} />
             <div className="absolute w-24 h-24 rounded-full border border-primary/30" style={{ animation: "ring-2 2s ease-out infinite", animationDelay: "0.6s" }} />
             <div className="absolute w-24 h-24 rounded-full border border-primary/20" style={{ animation: "ring-3 2s ease-out infinite", animationDelay: "1.2s" }} />
-
-            {/* Core orb */}
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center relative z-10 overflow-hidden"
               style={{
@@ -137,7 +220,6 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
                 animation: "orb-glow 2s ease-in-out infinite",
               }}
             >
-              {/* Radar sweep */}
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
@@ -152,7 +234,6 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
             </div>
           </div>
 
-          {/* Query label */}
           <div className="text-center">
             <h2 className="text-lg font-semibold tracking-tight truncate max-w-sm" dir="auto">{query}</h2>
             <p className="text-xs font-mono text-muted-foreground mt-1 uppercase tracking-widest">
@@ -163,32 +244,23 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
 
         {/* ── Step timeline ────────────────────────────────── */}
         <div className="relative space-y-0">
-          {/* Vertical connector line */}
           <div className="absolute left-[15px] top-4 bottom-4 w-px bg-border/60" />
-
           {steps.map((step, i) => (
             <div
               key={step.key}
               className="step-animate flex items-start gap-3 py-2.5 pl-1"
               style={{ animationDelay: `${i * 80}ms` }}
             >
-              {/* Step icon */}
               <div className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center">
-                {step.state === "done" && (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                )}
+                {step.state === "done" && <CheckCircle2 className="h-5 w-5 text-green-500" />}
                 {step.state === "active" && (
                   <div className="relative">
                     <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping" style={{ animationDuration: "1s" }} />
                     <Loader2 className="relative h-5 w-5 text-primary animate-spin" />
                   </div>
                 )}
-                {step.state === "pending" && (
-                  <div className="h-5 w-5 rounded-full border-2 border-border bg-background" />
-                )}
+                {step.state === "pending" && <div className="h-5 w-5 rounded-full border-2 border-border bg-background" />}
               </div>
-
-              {/* Step text */}
               <div className="pt-0.5 min-w-0">
                 <p className={cn(
                   "text-sm font-medium leading-none",
@@ -205,6 +277,23 @@ export function SearchProgress({ query, mode, status, searchQueries, synthesis, 
             </div>
           ))}
         </div>
+
+        {/* ── Live source website cards ─────────────────────── */}
+        {liveSources.length > 0 && (
+          <div className="space-y-2.5 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2">
+              <Globe className="h-3 w-3 text-primary/60" style={{ animation: "read-pulse 1.5s ease-in-out infinite" }} />
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                Reading {liveSources.length} source{liveSources.length > 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="sources-scroll flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {liveSources.map((src, i) => (
+                <SourceCard key={src.domain} src={src} index={i} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Live search queries ──────────────────────────── */}
         {searchQueries.length > 0 && (
