@@ -82,7 +82,6 @@ export function SearchBar({ onSearch, onStop, isSearching, initialQuery = "", in
       </div>
 
       <div className="flex items-center gap-1 px-4 pb-3 border-t border-border pt-3">
-        <span className="text-xs font-mono text-muted-foreground mr-2">MODE:</span>
         {modes.map((m) => (
           <button
             key={m.id}
