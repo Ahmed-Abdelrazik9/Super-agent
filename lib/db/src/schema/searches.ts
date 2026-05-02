@@ -16,6 +16,7 @@ export type SearchSource = z.infer<typeof searchSourceSchema>;
 export const searchesTable = pgTable("searches", {
   id: serial("id").primaryKey(),
   query: text("query").notNull(),
+  title: text("title"),
   mode: text("mode").notNull().default("deep"),
   synthesis: text("synthesis").notNull().default(""),
   sources: jsonb("sources").notNull().default([]).$type<SearchSource[]>(),

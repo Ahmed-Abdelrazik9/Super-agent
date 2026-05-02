@@ -9,6 +9,7 @@
 export interface SearchHistoryItem {
   id: string;
   query: string;
+  title?: string | null;
   mode: string;
   sourceCount: number;
   createdAt: string;

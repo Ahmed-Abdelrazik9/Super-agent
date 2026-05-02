@@ -1,11 +1,12 @@
-import { ReactNode } from "react";
+import { ReactNode, useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Zap, Plus, Trash2, Clock, Layers, Brain } from "lucide-react";
+import { Search, Zap, Plus, Trash2, Clock, Layers, Brain, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useListSearchHistory,
   getListSearchHistoryQueryKey,
   useDeleteSearch,
+  useUpdateSearch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,125 @@ function ModeIcon({ mode }: { mode: string }) {
   return <Layers className="h-3 w-3 shrink-0 text-primary" />;
 }
 
+function SidebarItem({
+  item,
+  isActive,
+  onDelete,
+  onRename,
+}: {
+  item: { id: number; query: string; title?: string | null; mode: string };
+  isActive: boolean;
+  onDelete: () => void;
+  onRename: (newTitle: string) => void;
+}) {
+  const href = `/search/${item.id}`;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const displayName = item.title || item.query;
+
+  function startEdit(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraft(displayName);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setDraft("");
+  }
+
+  function commitEdit() {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== displayName) {
+      onRename(trimmed);
+    }
+    setEditing(false);
+    setDraft("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") commitEdit();
+    if (e.key === "Escape") cancelEdit();
+  }
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  return (
+    <div
+      data-testid={`sidebar-search-${item.id}`}
+      className={cn(
+        "group flex items-center gap-1.5 w-full rounded-md px-2 py-2 text-left transition-colors",
+        isActive
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+      )}
+    >
+      {editing ? (
+        <>
+          <ModeIcon mode={item.mode} />
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={commitEdit}
+            className="flex-1 min-w-0 bg-background border border-primary/40 rounded px-1.5 py-0.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary/60"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={(e) => { e.stopPropagation(); commitEdit(); }}
+            className="shrink-0 p-0.5 rounded text-green-500 hover:text-green-400"
+            title="Save"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); cancelEdit(); }}
+            className="shrink-0 p-0.5 rounded hover:text-destructive"
+            title="Cancel"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </>
+      ) : (
+        <>
+          <Link href={href} className="flex items-center gap-2 flex-1 min-w-0">
+            <ModeIcon mode={item.mode} />
+            <span className="truncate text-sm leading-snug">{displayName}</span>
+          </Link>
+          <button
+            data-testid={`button-rename-search-${item.id}`}
+            onClick={startEdit}
+            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:text-primary"
+            title="Rename"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            data-testid={`button-delete-search-${item.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              onDelete();
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:text-destructive"
+            title="Delete"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const queryClient = useQueryClient();
@@ -30,6 +150,14 @@ export default function Layout({ children }: LayoutProps) {
   );
 
   const deleteSearch = useDeleteSearch({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListSearchHistoryQueryKey({ limit: 40 }) });
+      },
+    },
+  });
+
+  const updateSearch = useUpdateSearch({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListSearchHistoryQueryKey({ limit: 40 }) });
@@ -93,32 +221,13 @@ export default function Layout({ children }: LayoutProps) {
               const href = `/search/${item.id}`;
               const isActive = location === href;
               return (
-                <div
+                <SidebarItem
                   key={item.id}
-                  data-testid={`sidebar-search-${item.id}`}
-                  className={cn(
-                    "group flex items-center gap-2 w-full rounded-md px-2 py-2 text-left transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  )}
-                >
-                  <Link href={href} className="flex items-center gap-2 flex-1 min-w-0">
-                    <ModeIcon mode={item.mode} />
-                    <span className="truncate text-sm leading-snug">{item.query}</span>
-                  </Link>
-                  <button
-                    data-testid={`button-delete-search-${item.id}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      deleteSearch.mutate({ id: item.id });
-                    }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:text-destructive"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
+                  item={item}
+                  isActive={isActive}
+                  onDelete={() => deleteSearch.mutate({ id: item.id })}
+                  onRename={(title) => updateSearch.mutate({ id: item.id, data: { title } })}
+                />
               );
             })}
           </div>

@@ -8,6 +8,8 @@ import {
   ListSearchHistoryQueryParams,
   GetSearchParams,
   DeleteSearchParams,
+  UpdateSearchParams,
+  UpdateSearchBody,
   CreateFollowUpParams,
   CreateFollowUpBody,
 } from "@workspace/api-zod";
@@ -187,6 +189,7 @@ router.get("/search/history", async (req, res) => {
       items: items.map((s) => ({
         id: String(s.id),
         query: s.query,
+        title: s.title ?? null,
         mode: s.mode,
         sourceCount: Array.isArray(s.sources) ? s.sources.length : 0,
         createdAt: s.createdAt.toISOString(),
@@ -317,6 +320,41 @@ router.get("/search/:id", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get search");
     res.status(500).json({ error: "Failed to fetch search" });
+  }
+});
+
+// PATCH /search/:id — rename a search
+router.patch("/search/:id", async (req, res) => {
+  const params = UpdateSearchParams.safeParse(req.params);
+  const body = UpdateSearchBody.safeParse(req.body);
+
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(searchesTable)
+      .set({ title: body.data.title })
+      .where(eq(searchesTable.id, Number(params.data.id)))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Search not found" });
+      return;
+    }
+
+    res.json({
+      id: updated.id,
+      query: updated.query,
+      title: updated.title,
+      mode: updated.mode,
+      createdAt: updated.createdAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to rename search");
+    res.status(500).json({ error: "Failed to rename search" });
   }
 });
 

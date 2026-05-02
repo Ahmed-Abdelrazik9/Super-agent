@@ -37,6 +37,7 @@ export const ListSearchHistoryResponse = zod.object({
     zod.object({
       id: zod.string(),
       query: zod.string(),
+      title: zod.string().nullish(),
       mode: zod.string(),
       sourceCount: zod.number(),
       createdAt: zod.string(),
@@ -108,6 +109,27 @@ export const GetSearchResponse = zod.object({
  */
 export const DeleteSearchParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * @summary Rename a search (update its display title)
+ */
+export const UpdateSearchParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateSearchBody = zod.object({
+  title: zod.string(),
+});
+
+export const UpdateSearchResponse = zod.object({
+  id: zod.string(),
+  query: zod.string(),
+  title: zod.string().nullish(),
+  mode: zod.string(),
+  sourceCount: zod.number(),
+  createdAt: zod.string(),
+  previewText: zod.string(),
 });
 
 /**

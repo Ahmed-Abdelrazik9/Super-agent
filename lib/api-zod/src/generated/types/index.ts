@@ -19,3 +19,4 @@ export * from "./searchStats";
 export * from "./searchStatsTopModesItem";
 export * from "./trendingTopics";
 export * from "./trendingTopicsTopicsItem";
+export * from "./updateSearchBody";

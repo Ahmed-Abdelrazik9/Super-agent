@@ -9,6 +9,10 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface UpdateSearchBody {
+  title: string;
+}
+
 export type CreateSearchBodyMode =
   (typeof CreateSearchBodyMode)[keyof typeof CreateSearchBodyMode];
 
@@ -52,6 +56,7 @@ export interface SearchResult {
 export interface SearchHistoryItem {
   id: string;
   query: string;
+  title?: string | null;
   mode: string;
   sourceCount: number;
   createdAt: string;
